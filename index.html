@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIFA World Cup 2026 – Spin the Wheel</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #05101f;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 28px 16px 40px;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-size: clamp(1.4rem, 4vw, 2.2rem);
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #b8902a, #f5d44e, #e0a830, #f5d44e, #b8902a);
+      background-size: 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 4s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+    .header p {
+      margin-top: 6px;
+      font-size: 0.85rem;
+      color: #7aa4d8;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Wheel area ── */
+    .wheel-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .wheel-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    #wheelCanvas {
+      display: block;
+      filter: drop-shadow(0 0 24px rgba(200, 164, 60, 0.25));
+    }
+
+    /* Pointer triangle – drawn on canvas; this div is a fallback label */
+    .pointer-label {
+      position: absolute;
+      right: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 16px solid transparent;
+      border-bottom: 16px solid transparent;
+      border-right: 32px solid #f5d44e;
+      filter: drop-shadow(-3px 0 10px rgba(245, 212, 78, 0.9));
+      pointer-events: none;
+    }
+
+    /* ── Spin button ── */
+    #spinBtn {
+      padding: 14px 64px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #c8922a, #f5d44e, #c8922a);
+      color: #05101f;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(200, 164, 60, 0.45);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+    }
+    #spinBtn:hover:not(:disabled) {
+      transform: scale(1.06);
+      box-shadow: 0 6px 32px rgba(200, 164, 60, 0.65);
+    }
+    #spinBtn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    /* ── Result banner ── */
+    #result {
+      min-height: 90px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    #result .res-flag {
+      font-size: 3.2rem;
+      line-height: 1;
+      animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    #result .res-name {
+      font-size: 1.7rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #c8922a, #f5d44e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.05s both;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.4); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    /* ── Confetti canvas ── */
+    #confettiCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <h1>⚽ FIFA World Cup 2026</h1>
+    <p>48 Nations &nbsp;·&nbsp; USA &nbsp;•&nbsp; Canada &nbsp;•&nbsp; Mexico</p>
+  </header>
+
+  <div class="wheel-area">
+    <div class="wheel-wrapper">
+      <canvas id="wheelCanvas"></canvas>
+      <div class="pointer-label"></div>
+    </div>
+
+    <button id="spinBtn" onclick="spinWheel()">SPIN!</button>
+
+    <div id="result"></div>
+  </div>
+
+  <canvas id="confettiCanvas"></canvas>
+
+<script>
+// ── Teams ──────────────────────────────────────────────────────────────────
+const teams = [
+  { name: "Algeria",            flag: "🇩🇿" },
+  { name: "Argentina",          flag: "🇦🇷" },
+  { name: "Australia",          flag: "🇦🇺" },
+  { name: "Austria",            flag: "🇦🇹" },
+  { name: "Belgium",            flag: "🇧🇪" },
+  { name: "Bosnia & Herz.",     flag: "🇧🇦" },
+  { name: "Brazil",             flag: "🇧🇷" },
+  { name: "Canada",             flag: "🇨🇦" },
+  { name: "Cape Verde",         flag: "🇨🇻" },
+  { name: "Colombia",           flag: "🇨🇴" },
+  { name: "Croatia",            flag: "🇭🇷" },
+  { name: "Curaçao",            flag: "🇨🇼" },
+  { name: "Czech Republic",     flag: "🇨🇿" },
+  { name: "DR Congo",           flag: "🇨🇩" },
+  { name: "Ecuador",            flag: "🇪🇨" },
+  { name: "Egypt",              flag: "🇪🇬" },
+  { name: "England",            flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { name: "France",             flag: "🇫🇷" },
+  { name: "Germany",            flag: "🇩🇪" },
+  { name: "Ghana",              flag: "🇬🇭" },
+  { name: "Haiti",              flag: "🇭🇹" },
+  { name: "Iran",               flag: "🇮🇷" },
+  { name: "Iraq",               flag: "🇮🇶" },
+  { name: "Ivory Coast",        flag: "🇨🇮" },
+  { name: "Japan",              flag: "🇯🇵" },
+  { name: "Jordan",             flag: "🇯🇴" },
+  { name: "Mexico",             flag: "🇲🇽" },
+  { name: "Morocco",            flag: "🇲🇦" },
+  { name: "Netherlands",        flag: "🇳🇱" },
+  { name: "New Zealand",        flag: "🇳🇿" },
+  { name: "Norway",             flag: "🇳🇴" },
+  { name: "Panama",             flag: "🇵🇦" },
+  { name: "Paraguay",           flag: "🇵🇾" },
+  { name: "Portugal",           flag: "🇵🇹" },
+  { name: "Qatar",              flag: "🇶🇦" },
+  { name: "Saudi Arabia",       flag: "🇸🇦" },
+  { name: "Scotland",           flag: "🏴󠁧󠁢󠁳󠁣󠁴󠁿" },
+  { name: "Senegal",            flag: "🇸🇳" },
+  { name: "South Africa",       flag: "🇿🇦" },
+  { name: "South Korea",        flag: "🇰🇷" },
+  { name: "Spain",              flag: "🇪🇸" },
+  { name: "Sweden",             flag: "🇸🇪" },
+  { name: "Switzerland",        flag: "🇨🇭" },
+  { name: "Tunisia",            flag: "🇹🇳" },
+  { name: "Turkey",             flag: "🇹🇷" },
+  { name: "United States",      flag: "🇺🇸" },
+  { name: "Uruguay",            flag: "🇺🇾" },
+  { name: "Uzbekistan",         flag: "🇺🇿" },
+];
+
+// ── Colour palette (dark, rich, alternating) ──────────────────────────────
+const PALETTE = [
+  "#1a3c70","#173468","#1c4478","#163060",
+  "#1a5c3a","#175234","#1c6440","#14482e",
+  "#5c1a1a","#521517","#641c1c","#481414",
+  "#3a1a5c","#321552","#421c64","#281448",
+  "#1a3a5c","#153258","#1c4264","#142848",
+  "#5c3a1a","#523215","#64421c","#482814",
+  "#1a5c50","#155248","#1c6458","#144840",
+  "#5c1a3a","#521532","#641c42","#481428",
+  "#1a4c1a","#154415","#1c541c","#143814",
+  "#4c1a4c","#441544","#541c54","#381438",
+  "#1a1a5c","#151552","#1c1c64","#101048",
+  "#5c4c1a","#524415","#64541c","#483814",
+];
+
+// ── Canvas setup ──────────────────────────────────────────────────────────
+const canvas  = document.getElementById('wheelCanvas');
+const ctx     = canvas.getContext('2d');
+
+// Responsive sizing
+function getSize() {
+  const max = Math.min(window.innerWidth - 80, 580);
+  return Math.max(320, max);
+}
+
+let SIZE, CX, CY, RADIUS;
+function resize() {
+  SIZE   = getSize();
+  canvas.width  = SIZE + 60;   // extra 60px right for pointer triangle
+  canvas.height = SIZE;
+  CX     = SIZE / 2;
+  CY     = SIZE / 2;
+  RADIUS = SIZE / 2 - 10;
+  drawWheel(currentRotation);
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────
+const N = teams.length;
+const ARC = (2 * Math.PI) / N;
+
+let currentRotation = 0;
+
+function drawWheel(rotation) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Outer glow ring
+  ctx.save();
+  ctx.shadowColor = 'rgba(245, 212, 78, 0.4)';
+  ctx.shadowBlur = 22;
+  ctx.beginPath();
+  ctx.arc(CX, CY, RADIUS + 3, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#c8922a';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // Segments
+  for (let i = 0; i < N; i++) {
+    const start = rotation + i * ARC;
+    const end   = start + ARC;
+    const mid   = start + ARC / 2;
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, RADIUS, start, end);
+    ctx.closePath();
+    ctx.fillStyle = PALETTE[i % PALETTE.length];
+    ctx.fill();
+
+    // Divider
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, RADIUS, start, end);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Text: flag + name, radial from rim inward
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.rotate(mid);
+    ctx.textAlign  = 'right';
+    ctx.textBaseline = 'middle';
+
+    // Flag emoji
+    const flagSize = Math.max(9, RADIUS * 0.045);
+    ctx.font = `${flagSize}px serif`;
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillText(teams[i].flag, RADIUS - 6, 0);
+
+    // Country name
+    const nameSize = Math.max(7, RADIUS * 0.037);
+    ctx.font = `bold ${nameSize}px Arial, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    const flagW = ctx.measureText(teams[i].flag).width + 2;
+    ctx.fillText(teams[i].name, RADIUS - 6 - flagW - 4, 0);
+
+    ctx.restore();
+  }
+
+  // Center disc
+  const discR = RADIUS * 0.095;
+  ctx.beginPath();
+  ctx.arc(CX, CY, discR + 2, 0, 2 * Math.PI);
+  ctx.fillStyle = '#05101f';
+  ctx.fill();
+  ctx.strokeStyle = '#f5d44e';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.font = `${discR * 1.4}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⚽', CX, CY);
+
+  // Pointer arrow (drawn on canvas, stays fixed)
+  const tipX  = CX + RADIUS + 2;
+  const baseX = CX + RADIUS + 34;
+  const armH  = 16;
+  ctx.save();
+  ctx.shadowColor = 'rgba(245,212,78,0.85)';
+  ctx.shadowBlur  = 12;
+  ctx.beginPath();
+  ctx.moveTo(tipX,  CY);
+  ctx.lineTo(baseX, CY - armH);
+  ctx.lineTo(baseX, CY + armH);
+  ctx.closePath();
+  ctx.fillStyle = '#f5d44e';
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── Spin logic ────────────────────────────────────────────────────────────
+let isSpinning = false;
+let rafId;
+
+function easeOut(t) {
+  // cubic-bezier feel: fast start, smooth stop
+  return 1 - Math.pow(1 - t, 3.5);
+}
+
+function spinWheel() {
+  if (isSpinning) return;
+  isSpinning = true;
+  document.getElementById('spinBtn').disabled = true;
+  document.getElementById('result').innerHTML = '';
+
+  const extraRotations = (7 + Math.floor(Math.random() * 6)) * 2 * Math.PI;
+  const stopAngle      = Math.random() * 2 * Math.PI;
+  const totalDelta     = extraRotations + stopAngle;
+  const duration       = 4500 + Math.random() * 1500;
+  const startRotation  = currentRotation;
+  let   startTime      = null;
+
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    const elapsed  = ts - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    currentRotation = startRotation + totalDelta * easeOut(progress);
+    drawWheel(currentRotation);
+
+    if (progress < 1) {
+      rafId = requestAnimationFrame(step);
+    } else {
+      isSpinning = false;
+      document.getElementById('spinBtn').disabled = false;
+      revealWinner();
+    }
+  }
+
+  rafId = requestAnimationFrame(step);
+}
+
+function revealWinner() {
+  // Pointer is at angle 0 (east). Which segment covers angle 0?
+  const norm   = ((-(currentRotation % (2 * Math.PI))) + 2 * Math.PI) % (2 * Math.PI);
+  const idx    = Math.floor(norm / ARC) % N;
+  const winner = teams[idx];
+
+  document.getElementById('result').innerHTML =
+    `<span class="res-flag">${winner.flag}</span>
+     <span class="res-name">${winner.name}</span>`;
+
+  launchConfetti();
+}
+
+// ── Confetti ──────────────────────────────────────────────────────────────
+function launchConfetti() {
+  const cc     = document.getElementById('confettiCanvas');
+  cc.width     = window.innerWidth;
+  cc.height    = window.innerHeight;
+  const cCtx   = cc.getContext('2d');
+  const colors = ['#f5d44e','#c8922a','#ffffff','#4a90d9','#e74c3c','#2ecc71','#a29bfe'];
+
+  const particles = Array.from({ length: 160 }, () => ({
+    x:  Math.random() * cc.width,
+    y:  -10 - Math.random() * 120,
+    vx: (Math.random() - 0.5) * 5,
+    vy: 2.5 + Math.random() * 4,
+    w:  6 + Math.random() * 10,
+    h:  4 + Math.random() * 5,
+    rot: Math.random() * Math.PI * 2,
+    vr: (Math.random() - 0.5) * 0.25,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    alpha: 1,
+  }));
+
+  function confettiStep() {
+    cCtx.clearRect(0, 0, cc.width, cc.height);
+    let alive = false;
+    for (const p of particles) {
+      p.x   += p.vx;
+      p.y   += p.vy;
+      p.rot += p.vr;
+      if (p.y > cc.height * 0.65) p.alpha -= 0.018;
+      if (p.y < cc.height + 20 && p.alpha > 0) {
+        alive = true;
+        cCtx.save();
+        cCtx.globalAlpha = Math.max(0, p.alpha);
+        cCtx.translate(p.x, p.y);
+        cCtx.rotate(p.rot);
+        cCtx.fillStyle = p.color;
+        cCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        cCtx.restore();
+      }
+    }
+    if (alive) requestAnimationFrame(confettiStep);
+    else cCtx.clearRect(0, 0, cc.width, cc.height);
+  }
+
+  requestAnimationFrame(confettiStep);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+resize();
+window.addEventListener('resize', resize);
+
+// Also hide the CSS pointer-label div since we draw on canvas
+document.querySelector('.pointer-label').style.display = 'none';
+</script>
+</body>
+</html>
